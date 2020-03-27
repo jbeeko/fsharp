@@ -3,30 +3,31 @@
 /// Logic associated with resolving method calls.
 module internal FSharp.Compiler.MethodCalls
 
+open Internal.Utilities
+
 open FSharp.Compiler 
 open FSharp.Compiler.AbstractIL.IL 
 open FSharp.Compiler.AbstractIL.Internal.Library 
-open FSharp.Compiler.Range
-open FSharp.Compiler.Ast
+open FSharp.Compiler.AbstractSyntax
+open FSharp.Compiler.AbstractSyntaxOps
+open FSharp.Compiler.AccessibilityLogic
+open FSharp.Compiler.AttributeChecking
 open FSharp.Compiler.ErrorLogger
 open FSharp.Compiler.Features
-open FSharp.Compiler.Lib
-open FSharp.Compiler.Infos
-open FSharp.Compiler.AccessibilityLogic
-open FSharp.Compiler.NameResolution
 open FSharp.Compiler.InfoReader
+open FSharp.Compiler.Infos
+open FSharp.Compiler.Lib
+open FSharp.Compiler.NameResolution
+open FSharp.Compiler.Range
 open FSharp.Compiler.Tast
 open FSharp.Compiler.Tastops
 open FSharp.Compiler.Tastops.DebugPrint
 open FSharp.Compiler.TcGlobals
 open FSharp.Compiler.TypeRelations
-open FSharp.Compiler.AttributeChecking
-open Internal.Utilities
 
 #if !NO_EXTENSIONTYPING
 open FSharp.Compiler.ExtensionTyping
 #endif
-
 
 //-------------------------------------------------------------------------
 // Sets of methods involved in overload resolution and trait constraint
@@ -47,9 +48,13 @@ open FSharp.Compiler.ExtensionTyping
 type CallerArg<'T> = 
     /// CallerArg(ty, range, isOpt, exprInfo)
     | CallerArg of ty: TType * range: range * isOpt: bool * exprInfo: 'T  
+
     member x.CallerArgumentType = (let (CallerArg(ty, _, _, _)) = x in ty)
+
     member x.Range = (let (CallerArg(_, m, _, _)) = x in m)
+
     member x.IsExplicitOptional = (let (CallerArg(_, _, isOpt, _)) = x in isOpt)
+
     member x.Expr = (let (CallerArg(_, _, _, expr)) = x in expr)
     
 /// Represents the information about an argument in the method being called
@@ -1484,7 +1489,7 @@ module ProvidedMethodCalls =
                 let testExpr = exprToExpr test
                 let ifTrueExpr = exprToExpr thenBranch
                 let ifFalseExpr = exprToExpr elseBranch
-                let te = mkCond NoSequencePointAtStickyBinding SuppressSequencePointAtTarget m (tyOfExpr g ifTrueExpr) testExpr ifTrueExpr ifFalseExpr
+                let te = mkCond NoDebugPointAtStickyBinding DebugPointForTarget.No m (tyOfExpr g ifTrueExpr) testExpr ifTrueExpr ifFalseExpr
                 None, (te, tyOfExpr g te)
             | None -> 
             match ea.PApplyOption((function ProvidedVarExpr x -> Some x | _ -> None), m) with
@@ -1561,7 +1566,7 @@ module ProvidedMethodCalls =
                 let guardExpr, bodyExpr = info.PApply2(id, m)
                 let guardExprT = exprToExpr guardExpr
                 let bodyExprT = exprToExpr bodyExpr
-                let exprT = mkWhile g (SequencePointInfoForWhileLoop.NoSequencePointAtWhileLoop, SpecialWhileLoopMarker.NoSpecialWhileLoopMarker, guardExprT, bodyExprT, m)
+                let exprT = mkWhile g (DebugPointAtWhile.No, SpecialWhileLoopMarker.NoSpecialWhileLoopMarker, guardExprT, bodyExprT, m)
                 None, (exprT, tyOfExpr g exprT)
             | None -> 
             match ea.PApplyOption((function ProvidedForIntegerRangeLoopExpr x -> Some x | _ -> None), m) with
@@ -1572,7 +1577,7 @@ module ProvidedMethodCalls =
                 let vT = addVar v
                 let e3T = exprToExpr  e3
                 removeVar v
-                let exprT = mkFastForLoop g (SequencePointInfoForForLoop.NoSequencePointAtForLoop, m, vT, e1T, true, e2T, e3T)
+                let exprT = mkFastForLoop g (DebugPointAtFor.No, m, vT, e1T, true, e2T, e3T)
                 None, (exprT, tyOfExpr g exprT)
             | None -> 
             match ea.PApplyOption((function ProvidedNewDelegateExpr x -> Some x | _ -> None), m) with
@@ -1621,7 +1626,7 @@ module ProvidedMethodCalls =
                 let e1, e2 = info.PApply2(id, m)
                 let e1T = exprToExpr e1
                 let e2T = exprToExpr e2
-                let ce = mkTryFinally g (e1T, e2T, m, tyOfExpr g e1T, SequencePointInfoForTry.NoSequencePointAtTry, SequencePointInfoForFinally.NoSequencePointAtFinally)
+                let ce = mkTryFinally g (e1T, e2T, m, tyOfExpr g e1T, DebugPointAtTry.No, DebugPointAtFinally.No)
                 None, (ce, tyOfExpr g ce)
             | None -> 
             match ea.PApplyOption((function ProvidedTryWithExpr c -> Some c | _ -> None), m) with 
@@ -1635,7 +1640,7 @@ module ProvidedMethodCalls =
                 let v2T = addVar v2
                 let e2T = exprToExpr (info.PApply((fun (_, _, _, _, x) -> x), m))
                 removeVar v2
-                let ce = mkTryWith g (bT, v1T, e1T, v2T, e2T, m, tyOfExpr g bT, SequencePointInfoForTry.NoSequencePointAtTry, SequencePointInfoForWith.NoSequencePointAtWith)
+                let ce = mkTryWith g (bT, v1T, e1T, v2T, e2T, m, tyOfExpr g bT, DebugPointAtTry.No, DebugPointAtWith.No)
                 None, (ce, tyOfExpr g ce)
             | None -> 
             match ea.PApplyOption((function ProvidedNewObjectExpr c -> Some c | _ -> None), m) with 
@@ -1749,8 +1754,6 @@ module ProvidedMethodCalls =
                 raise( tpe.WithContext(typeName, methName) )  // loses original stack trace
 #endif
 
-
-
 let RecdFieldInstanceChecks g amap ad m (rfinfo: RecdFieldInfo) = 
     if rfinfo.IsStatic then error (Error (FSComp.SR.tcStaticFieldUsedWhenInstanceFieldExpected(), m))
     CheckRecdFieldInfoAttributes g rfinfo m |> CommitOperationResult        
@@ -1811,7 +1814,6 @@ exception FieldNotMutable of DisplayEnv * Tast.RecdFieldRef * range
 let CheckRecdFieldMutation m denv (rfinfo: RecdFieldInfo) = 
     if not rfinfo.RecdField.IsMutable then
         errorR (FieldNotMutable (denv, rfinfo.RecdFieldRef, m))
-
 
 /// Generate a witness for the given (solved) constraint.  Five possiblilities are taken
 /// into account.

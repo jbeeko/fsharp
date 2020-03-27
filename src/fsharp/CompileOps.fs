@@ -25,7 +25,8 @@ open FSharp.Compiler.AbstractIL.Extensions.ILX
 open FSharp.Compiler.AbstractIL.Diagnostics
 
 open FSharp.Compiler
-open FSharp.Compiler.Ast
+open FSharp.Compiler.AbstractSyntax
+open FSharp.Compiler.AbstractSyntaxOps
 open FSharp.Compiler.AttributeChecking
 open FSharp.Compiler.ConstraintSolver
 open FSharp.Compiler.DiagnosticMessage
@@ -38,6 +39,7 @@ open FSharp.Compiler.Lib
 open FSharp.Compiler.MethodCalls
 open FSharp.Compiler.MethodOverrides
 open FSharp.Compiler.NameResolution
+open FSharp.Compiler.ParseHelpers
 open FSharp.Compiler.PrettyNaming
 open FSharp.Compiler.Range
 open FSharp.Compiler.ReferenceResolver
@@ -48,6 +50,7 @@ open FSharp.Compiler.Tast
 open FSharp.Compiler.Tastops
 open FSharp.Compiler.TcGlobals
 open FSharp.Compiler.Text
+open FSharp.Compiler.XmlDoc
 
 open FSharp.Compiler.DotNetFrameworkDependencies
 
@@ -711,7 +714,8 @@ let OutputPhasedErrorR (os: StringBuilder) (err: PhasedDiagnostic) (canSuggestNa
                 os.Append(System.Environment.NewLine + FSComp.SR.derefInsteadOfNot()) |> ignore
           | _ -> os.Append(ErrorFromAddingTypeEquation1E().Format t2 t1 tpcs) |> ignore
 
-      | ErrorFromAddingTypeEquation(_, _, _, _, ((ConstraintSolverTypesNotInEqualityRelation (_, _, _, _, _, contextInfo) ) as e), _) when (match contextInfo with ContextInfo.NoContext -> false | _ -> true) ->  
+      | ErrorFromAddingTypeEquation(_, _, _, _, ((ConstraintSolverTypesNotInEqualityRelation (_, _, _, _, _, contextInfo) ) as e), _)
+              when (match contextInfo with ContextInfo.NoContext -> false | _ -> true) ->  
           OutputExceptionR os e
 
       | ErrorFromAddingTypeEquation(_, _, _, _, ((ConstraintSolverTypesNotInSubsumptionRelation _ | ConstraintSolverError _ ) as e), _) ->  
@@ -3096,7 +3100,11 @@ type TcConfig private (data: TcConfigBuilder, validate: bool) =
     // it must return warnings and errors as data
     //
     // NOTE!! if mode=ReportErrors then this method must not raise exceptions. It must just report the errors and recover
-    static member TryResolveLibsUsingMSBuildRules (tcConfig: TcConfig, originalReferences: AssemblyReference list, errorAndWarningRange: range, mode: ResolveAssemblyReferenceMode) : AssemblyResolution list * UnresolvedAssemblyReference list =
+    static member TryResolveLibsUsingMSBuildRules (tcConfig: TcConfig, 
+            originalReferences: AssemblyReference list,
+            errorAndWarningRange: range,
+            mode: ResolveAssemblyReferenceMode) : AssemblyResolution list * UnresolvedAssemblyReference list =
+
         use unwindBuildPhase = PushThreadBuildPhaseUntilUnwind BuildPhase.Parameter
         if tcConfig.useSimpleResolution then
             failwith "MSBuild resolution is not supported."
@@ -3334,8 +3342,11 @@ let PrependPathToSpec x (SynModuleOrNamespaceSig(p, b, c, d, e, f, g, h)) = SynM
 
 let PrependPathToInput x inp = 
     match inp with 
-    | ParsedInput.ImplFile (ParsedImplFileInput (b, c, q, d, hd, impls, e)) -> ParsedInput.ImplFile (ParsedImplFileInput (b, c, PrependPathToQualFileName x q, d, hd, List.map (PrependPathToImpl x) impls, e))
-    | ParsedInput.SigFile (ParsedSigFileInput (b, q, d, hd, specs)) -> ParsedInput.SigFile (ParsedSigFileInput (b, PrependPathToQualFileName x q, d, hd, List.map (PrependPathToSpec x) specs))
+    | ParsedInput.ImplFile (ParsedImplFileInput (b, c, q, d, hd, impls, e)) ->
+        ParsedInput.ImplFile (ParsedImplFileInput (b, c, PrependPathToQualFileName x q, d, hd, List.map (PrependPathToImpl x) impls, e))
+
+    | ParsedInput.SigFile (ParsedSigFileInput (b, q, d, hd, specs)) ->
+        ParsedInput.SigFile (ParsedSigFileInput (b, PrependPathToQualFileName x q, d, hd, List.map (PrependPathToSpec x) specs))
 
 let ComputeAnonModuleName check defaultNamespace filename (m: range) = 
     let modname = CanonicalizeFilename filename
@@ -4576,7 +4587,8 @@ and [<Sealed>] TcImports(tcConfigP: TcConfigProvider, initialResolutions: TcAsse
                      match ilModule.TryGetILModuleDef() with 
                      | None -> () // no type providers can be used without a real IL Module present
                      | Some ilModule ->
-                         ccuinfo.TypeProviders <- tcImports.ImportTypeProviderExtensions (ctok, tcConfig, filename, ilScopeRef, ilModule.ManifestOfAssembly.CustomAttrs.AsList, ccu.Contents, invalidateCcu, m)
+                         let tps = tcImports.ImportTypeProviderExtensions (ctok, tcConfig, filename, ilScopeRef, ilModule.ManifestOfAssembly.CustomAttrs.AsList, ccu.Contents, invalidateCcu, m)
+                         ccuinfo.TypeProviders <- tps
 #else
                      ()
 #endif
@@ -4996,9 +5008,6 @@ let ProcessMetaCommandsFromInput
                     let output = tcConfig.outputDir |> Option.defaultValue ""
                     let dm = tcConfig.dependencyProvider.TryFindDependencyManagerInPath(tcConfig.compilerToolPaths, output , reportError, path)
                     match dm with
-                    | dllpath, null when String.IsNullOrWhiteSpace(dllpath) ->
-                        state           // error already reported
-
                     | _, dependencyManager when not(isNull dependencyManager) ->
                         if tcConfig.langVersion.SupportsFeature(LanguageFeature.PackageManagement) then
                             packageRequireF state (dependencyManager, m, path)
@@ -5008,7 +5017,11 @@ let ProcessMetaCommandsFromInput
 
                     // #r "Assembly"
                     | path, _ ->
-                        dllRequireF state (m, path)
+                        let p =
+                            if String.IsNullOrWhiteSpace(path) then ""
+                            else path
+
+                        dllRequireF state (m, p)
 
                 | _ ->
                    errorR(Error(FSComp.SR.buildInvalidHashrDirective(), m))

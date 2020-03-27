@@ -10,26 +10,29 @@ open System
 open System.Collections.Generic 
 open System.Diagnostics
 open System.Reflection
+
 open Internal.Utilities
+
+open FSharp.Compiler 
 open FSharp.Compiler.AbstractIL 
 open FSharp.Compiler.AbstractIL.IL 
 open FSharp.Compiler.AbstractIL.Internal 
 open FSharp.Compiler.AbstractIL.Internal.Library
 open FSharp.Compiler.AbstractIL.Extensions.ILX.Types
-
-open FSharp.Compiler 
-open FSharp.Compiler.Range
-open FSharp.Compiler.Ast
+open FSharp.Compiler.AbstractSyntax
+open FSharp.Compiler.AbstractSyntaxOps
 open FSharp.Compiler.ErrorLogger
 open FSharp.Compiler.Lib
 open FSharp.Compiler.PrettyNaming
 open FSharp.Compiler.QuotationPickler
-open Microsoft.FSharp.Core.Printf
+open FSharp.Compiler.Range
 open FSharp.Compiler.Rational
+open FSharp.Compiler.XmlDoc
+open FSharp.Core.Printf
 
 #if !NO_EXTENSIONTYPING
 open FSharp.Compiler.ExtensionTyping
-open Microsoft.FSharp.Core.CompilerServices
+open FSharp.Core.CompilerServices
 #endif
 
 /// Unique name generator for stamps attached to lambdas and object expressions
@@ -1675,6 +1678,7 @@ and
     member uc.RecdFields = uc.FieldTable.FieldsByIndex |> Array.toList
 
     member uc.GetFieldByName nm = uc.FieldTable.FieldByName nm
+    member uc.GetFieldByIndex nm = uc.FieldTable.FieldByIndex nm
 
     member uc.IsNullary = (uc.FieldTable.FieldsByIndex.Length = 0)
 
@@ -4594,7 +4598,7 @@ and
 and 
     [<NoEquality; NoComparison; StructuredFormatDisplay("{DebugText}")>]
     DecisionTreeTarget = 
-    | TTarget of Vals * Expr * SequencePointInfoForTarget
+    | TTarget of Vals * Expr * DebugPointForTarget
 
     [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member x.DebugText = x.ToString()
@@ -4608,7 +4612,7 @@ and Bindings = Binding list
 and 
     [<NoEquality; NoComparison; StructuredFormatDisplay("{DebugText}")>]
     Binding = 
-    | TBind of Val * Expr * SequencePointInfoForBinding
+    | TBind of Val * Expr * DebugPointForBinding
 
     /// The value being bound
     member x.Var = (let (TBind(v, _, _)) = x in v)
@@ -4617,7 +4621,7 @@ and
     member x.Expr = (let (TBind(_, e, _)) = x in e)
 
     /// The information about whether to emit a sequence point for the binding
-    member x.SequencePointInfo = (let (TBind(_, _, sp)) = x in sp)
+    member x.DebugPoint = (let (TBind(_, _, sp)) = x in sp)
 
     [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member x.DebugText = x.ToString()
@@ -4730,7 +4734,7 @@ and
     | Val of ValRef * ValUseFlag * range
 
     /// Sequence expressions, used for "a;b", "let a = e in b;a" and "a then b" (the last an OO constructor). 
-    | Sequential of Expr * Expr * SequentialOpKind * SequencePointInfoForSeq * range
+    | Sequential of Expr * Expr * SequentialOpKind * DebugPointAtSequential * range
 
     /// Lambda expressions. 
     
@@ -4771,7 +4775,7 @@ and
     /// and possibly multiple ways to get to each destination.  
     /// The first mark is that of the expression being matched, which is used 
     /// as the mark for all the decision making and binding that happens during the match. 
-    | Match of SequencePointInfoForBinding * range * DecisionTree * DecisionTreeTarget array * range * TType
+    | Match of DebugPointForBinding * range * DecisionTree * DecisionTreeTarget array * range * TType
 
     /// If we statically know some information then in many cases we can use a more optimized expression 
     /// This is primarily used by terms in the standard library, particularly those implementing overloaded 
@@ -4835,16 +4839,16 @@ and
     | UInt16s of uint16[] 
 
     /// An operation representing a lambda-encoded while loop. The special while loop marker is used to mark compilations of 'foreach' expressions
-    | While of SequencePointInfoForWhileLoop * SpecialWhileLoopMarker
+    | While of DebugPointAtWhile * SpecialWhileLoopMarker
 
     /// An operation representing a lambda-encoded for loop
-    | For of SequencePointInfoForForLoop * ForLoopStyle (* count up or down? *)
+    | For of DebugPointAtFor * ForLoopStyle (* count up or down? *)
 
     /// An operation representing a lambda-encoded try/catch
-    | TryCatch of SequencePointInfoForTry * SequencePointInfoForWith
+    | TryCatch of DebugPointAtTry * DebugPointAtWith
 
     /// An operation representing a lambda-encoded try/finally
-    | TryFinally of SequencePointInfoForTry * SequencePointInfoForFinally
+    | TryFinally of DebugPointAtTry * DebugPointAtFinally
 
     /// Construct a record or object-model value. The ValRef is for self-referential class constructors, otherwise 
     /// it indicates that we're in a constructor and the purpose of the expression is to 
@@ -5304,15 +5308,23 @@ module ValReprInfo =
 //---------------------------------------------------------------------------
 
 let typeOfVal (v: Val) = v.Type
+
 let typesOfVals (v: Val list) = v |> List.map (fun v -> v.Type)
+
 let nameOfVal (v: Val) = v.LogicalName
+
 let arityOfVal (v: Val) = (match v.ValReprInfo with None -> ValReprInfo.emptyValData | Some arities -> arities)
 
 let tupInfoRef = TupInfo.Const false
+
 let tupInfoStruct = TupInfo.Const true
+
 let mkTupInfo b = if b then tupInfoStruct else tupInfoRef
+
 let structnessDefault = false
+
 let mkRawRefTupleTy tys = TType_tuple (tupInfoRef, tys)
+
 let mkRawStructTupleTy tys = TType_tuple (tupInfoStruct, tys)
 
 //---------------------------------------------------------------------------
@@ -5320,8 +5332,13 @@ let mkRawStructTupleTy tys = TType_tuple (tupInfoStruct, tys)
 // make up the entire compilation unit
 //---------------------------------------------------------------------------
 
-let mapTImplFile f (TImplFile (fragName, pragmas, moduleExpr, hasExplicitEntryPoint, isScript, anonRecdTypes)) = TImplFile (fragName, pragmas, f moduleExpr, hasExplicitEntryPoint, isScript, anonRecdTypes)
-let mapAccImplFile f z (TImplFile (fragName, pragmas, moduleExpr, hasExplicitEntryPoint, isScript, anonRecdTypes)) = let moduleExpr, z = f z moduleExpr in TImplFile (fragName, pragmas, moduleExpr, hasExplicitEntryPoint, isScript, anonRecdTypes), z
+let mapTImplFile f (TImplFile (fragName, pragmas, moduleExpr, hasExplicitEntryPoint, isScript, anonRecdTypes)) =
+    TImplFile (fragName, pragmas, f moduleExpr, hasExplicitEntryPoint, isScript, anonRecdTypes)
+
+let mapAccImplFile f z (TImplFile (fragName, pragmas, moduleExpr, hasExplicitEntryPoint, isScript, anonRecdTypes)) =
+    let moduleExpr, z = f z moduleExpr
+    TImplFile (fragName, pragmas, moduleExpr, hasExplicitEntryPoint, isScript, anonRecdTypes), z
+
 let foldTImplFile f z (TImplFile (_, _, moduleExpr, _, _, _)) = f z moduleExpr
 
 //---------------------------------------------------------------------------
@@ -5348,14 +5365,13 @@ let ccuEq (mv1: CcuThunk) (mv2: CcuThunk) =
 /// For dereferencing in the middle of a pattern
 let (|ValDeref|) (vr: ValRef) = vr.Deref
 
-
 //--------------------------------------------------------------------------
 // Make references to TAST items
 //--------------------------------------------------------------------------
 
 let mkRecdFieldRef tcref f = RFRef(tcref, f)
-let mkUnionCaseRef tcref c = UCRef(tcref, c)
 
+let mkUnionCaseRef tcref c = UCRef(tcref, c)
 
 let ERefLocal x: EntityRef = { binding=x; nlr=Unchecked.defaultof<_> }      
 let ERefNonLocal x: EntityRef = { binding=Unchecked.defaultof<_>; nlr=x }      
@@ -5369,12 +5385,17 @@ let (|ERefLocal|ERefNonLocal|) (x: EntityRef) =
 // Construct local references
 //-------------------------------------------------------------------------- 
 
-
 let mkLocalTyconRef x = ERefLocal x
+
 let mkNonLocalEntityRef ccu mp = NonLocalEntityRef(ccu, mp)
-let mkNestedNonLocalEntityRef (nleref: NonLocalEntityRef) id = mkNonLocalEntityRef nleref.Ccu (Array.append nleref.Path [| id |])
+
+let mkNestedNonLocalEntityRef (nleref: NonLocalEntityRef) id =
+    mkNonLocalEntityRef nleref.Ccu (Array.append nleref.Path [| id |])
+
 let mkNonLocalTyconRef nleref id = ERefNonLocal (mkNestedNonLocalEntityRef nleref id)
-let mkNonLocalTyconRefPreResolved x nleref id = ERefNonLocalPreResolved x (mkNestedNonLocalEntityRef nleref id)
+
+let mkNonLocalTyconRefPreResolved x nleref id =
+    ERefNonLocalPreResolved x (mkNestedNonLocalEntityRef nleref id)
 
 type EntityRef with 
 
@@ -5484,6 +5505,7 @@ let rec stripTyparEqnsAux canShortcut ty =
     | _ -> ty
 
 let stripTyparEqns ty = stripTyparEqnsAux false ty
+
 let stripUnitEqns unt = stripUnitEqnsAux false unt
 
 //---------------------------------------------------------------------------
