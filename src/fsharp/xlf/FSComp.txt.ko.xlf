@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="featureAndBang">
-        <source>and bang</source>
-        <target state="new">and bang</target>
+        <source>applicative computation expressions</source>
+        <target state="new">applicative computation expressions</target>
         <note />
       </trans-unit>
       <trans-unit id="featureDefaultInterfaceMemberConsumption">
@@ -120,6 +120,11 @@
       <trans-unit id="featureWildCardInForLoop">
         <source>wild card in for loop</source>
         <target state="new">wild card in for loop</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="featureWitnessPassing">
+        <source>witness passing</source>
+        <target state="new">witness passing</target>
         <note />
       </trans-unit>
       <trans-unit id="formatDashItem">
