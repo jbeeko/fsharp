@@ -394,17 +394,6 @@ namespace Microsoft.FSharp.Core
     /// <summary>Represents a out-argument managed pointer in F# code. This type should only be used with F# 4.5+.</summary>
     type outref<'T> = byref<'T, ByRefKinds.Out>
 
-    module PrimReflectionAdapters =
-
-        type System.Type with
-            
-            // Note, this differs slightly from the nettstandard1.6 FX_RESHAPED_REFLECTION case as it looks for non-public methods.
-            member inline this.GetSingleStaticMethodByTypes(name: string, parameterTypes: Type[]) =
-               let staticBindingFlags = (# "" 0b111000 : BindingFlags #) // BindingFlags.Static ||| BindingFlags.Public ||| BindingFlags.NonPublic
-               this.GetMethod(name, staticBindingFlags, null, parameterTypes, null )
-
-    open PrimReflectionAdapters
-
     module internal BasicInlinedOperations =  
         let inline unboxPrim<'T>(x:obj) = (# "unbox.any !0" type ('T) x : 'T #)
         let inline box     (x:'T) = (# "box !0" type ('T) x : obj #)
@@ -2473,6 +2462,12 @@ namespace Microsoft.FSharp.Core
              // this condition is used whenever ^T is resolved to a nominal type
              // That is, not in the generic implementation of '+'
             when ^T : ^T = (^T : (static member One : ^T) ())
+
+        type System.Type with
+    
+            member inline this.GetSingleStaticMethodByTypes(name: string, parameterTypes: Type[]) =
+               let staticBindingFlags = (# "" 0b111000 : BindingFlags #) // BindingFlags.Static ||| BindingFlags.Public ||| BindingFlags.NonPublic
+               this.GetMethod(name, staticBindingFlags, null, parameterTypes, null )
 
         let UnaryDynamicImpl nm : ('T -> 'U) =
              let aty = typeof<'T>

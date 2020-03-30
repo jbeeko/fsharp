@@ -1869,11 +1869,13 @@ let GenWitnessExpr amap g m (traitInfo: TraitConstraintInfo) argExprs =
     match sln with
     | Choice1Of5(minfo, methArgTys) -> 
         let argExprs = 
-            // FIX for #421894 - typechecker assumes that coercion can be applied for the trait calls arguments but codegen doesn't emit coercion operations
-            // result - generation of non-verifyable code
+            // FIX for #421894 - typechecker assumes that coercion can be applied for the trait
+            // calls arguments but codegen doesn't emit coercion operations
+            // result - generation of non-verifiable code
             // fix - apply coercion for the arguments (excluding 'receiver' argument in instance calls)
 
-            // flatten list of argument types (looks like trait calls with curried arguments are not supported so we can just convert argument list in straighforward way)
+            // flatten list of argument types (looks like trait calls with curried arguments are not supported so
+            // we can just convert argument list in straight-forward way)
             let argTypes =
                 minfo.GetParamTypes(amap, m, methArgTys) 
                 |> List.concat 

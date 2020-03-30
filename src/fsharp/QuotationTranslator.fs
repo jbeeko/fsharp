@@ -18,6 +18,7 @@ open FSharp.Compiler.TypedTreeBasics
 open FSharp.Compiler.TypedTreeOps
 open FSharp.Compiler.TcGlobals
 open System.Collections.Generic
+open System.Collections.Immutable
 
 module QP = FSharp.Compiler.QuotationPickler
 
@@ -89,8 +90,11 @@ type QuotationTranslationEnv =
       /// Indicates this is a witness arg we we disable further generation of witnesses
       isWitness: bool
 
-      /// All witnesses in scope and their mapping to lambda variables
-      witnessesInScope: System.Collections.Immutable.ImmutableDictionary<TraitWitnessInfo, int>
+      /// All witnesses in scope and their mapping to lambda variables.
+      //
+      // Note: this uses an immutable HashMap/Dictionary with an IEqualityComparer that captures TcGlobals, see
+      // the point where the empty initial object is created.
+      witnessesInScope: TraitWitnessInfoHashMap<int>
 
       // Map for values bound by the
       //     'let v = isinst e in .... if nonnull v then ...v .... '
@@ -106,12 +110,7 @@ type QuotationTranslationEnv =
           numValsInScope = 0
           tyvs = Map.empty
           isWitness = false
-          witnessesInScope= 
-              System.Collections.Immutable.ImmutableDictionary.Create(
-                   { new IEqualityComparer<_> with 
-                          member __.Equals(a, b) = traitKeysAEquiv g TypeEquivEnv.Empty a b
-                          member __.GetHashCode(a) = hash a.MemberName
-                   })
+          witnessesInScope = EmptyTraitWitnessInfoHashMap g
           isinstVals = ValMap<_>.Empty
           substVals = ValMap<_>.Empty }
 

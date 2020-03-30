@@ -839,8 +839,8 @@ and IlxGenEnv =
       /// All values in scope
       valsInScope: ValMap<Lazy<ValStorage>>
 
-      /// All witnesses in scope
-      witnessesInScope: ImmutableDictionary<TraitWitnessInfo, ValStorage>
+      /// All witnesses in scope and their mapping to storage for the witness value.
+      witnessesInScope: TraitWitnessInfoHashMap<ValStorage>
 
       /// For optimizing direct tail recursion to a loop - mark says where to branch to.  Length is 0 or 1.
       /// REVIEW: generalize to arbitrary nested local loops??
@@ -7845,12 +7845,7 @@ let GetEmptyIlxGenEnv (g: TcGlobals) ccu =
     { tyenv=TypeReprEnv.Empty
       cloc = thisCompLoc
       valsInScope=ValMap<_>.Empty
-      witnessesInScope= 
-          ImmutableDictionary.Create(
-               { new IEqualityComparer<_> with 
-                      member __.Equals(a, b) = traitKeysAEquiv g TypeEquivEnv.Empty a b
-                      member __.GetHashCode(a) = hash a.MemberName
-               })
+      witnessesInScope = EmptyTraitWitnessInfoHashMap g
       someTypeInThisAssembly= g.ilg.typ_Object // dummy value
       isFinalFile = false
       letBoundVars=[]

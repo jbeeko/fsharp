@@ -3,7 +3,8 @@
 /// Defines derived expression manipulation and construction functions.
 module internal FSharp.Compiler.TypedTreeOps
 
-open System.Collections.Generic 
+open System.Collections.Generic
+open System.Collections.Immutable
 open Internal.Utilities
 
 open FSharp.Compiler 
@@ -9195,4 +9196,15 @@ let CombineCcuContentFragments m l =
 
     CombineModuleOrNamespaceTypeList [] m l
 
+/// An immutable mappping from witnesses to some data.
+///
+/// Note: this uses an immutable HashMap/Dictionary with an IEqualityComparer that captures TcGlobals, see EmptyTraitWitnessInfoHashMap
+type TraitWitnessInfoHashMap<'T> = ImmutableDictionary<TraitWitnessInfo, 'T>
 
+/// Create an empty immutable mapping from witnesses to some data
+let EmptyTraitWitnessInfoHashMap g : TraitWitnessInfoHashMap<'T> =
+    ImmutableDictionary.Create(
+         { new IEqualityComparer<_> with 
+                member __.Equals(a, b) = traitKeysAEquiv g TypeEquivEnv.Empty a b
+                member __.GetHashCode(a) = hash a.MemberName
+         })

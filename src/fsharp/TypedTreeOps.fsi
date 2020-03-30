@@ -18,6 +18,7 @@ open FSharp.Compiler.SyntaxTree
 open FSharp.Compiler.TypedTree
 open FSharp.Compiler.TcGlobals
 open FSharp.Compiler.XmlDoc
+open System.Collections.Immutable
 
 type Erasure = EraseAll | EraseMeasures | EraseNone
 
@@ -2351,3 +2352,11 @@ val GetTraitWitnessInfosOfTypars: TcGlobals -> numParentTypars: int -> typars: T
 val isStaticClass: g: TcGlobals -> tcref: TyconRef -> bool
 
 val CombineCcuContentFragments: range -> ModuleOrNamespaceType list -> ModuleOrNamespaceType
+
+/// An immutable mappping from witnesses to some data.
+///
+/// Note: this uses an immutable HashMap/Dictionary with an IEqualityComparer that captures TcGlobals, see EmptyTraitWitnessInfoHashMap
+type TraitWitnessInfoHashMap<'T> = ImmutableDictionary<TraitWitnessInfo, 'T>
+
+/// Create an empty immutable mapping from witnesses to some data
+val EmptyTraitWitnessInfoHashMap: TcGlobals -> TraitWitnessInfoHashMap<'T>

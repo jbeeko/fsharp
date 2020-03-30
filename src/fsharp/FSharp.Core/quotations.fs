@@ -660,7 +660,7 @@ module Patterns =
         let fty = ((typeOf f): Type)
         match fty.GetGenericArguments() with
         | [| _; b|] -> b
-        | _ -> raise <| System.InvalidOperationException (SR.GetString(SR.QillFormedAppOrLet))
+        | _ -> invalidOp (SR.GetString(SR.QillFormedAppOrLet))
 
     /// Returns type of the Raw quotation or fails if the quotation is ill formed
     /// if 'verify' is true, verifies all branches, otherwise ignores some of them when not needed
@@ -1068,7 +1068,7 @@ module Patterns =
                 res
             // return MethodInfo for (generic) type's (generic) method
             match List.tryFind select methInfos with    
-            | None          -> raise <| System.InvalidOperationException (SR.GetString SR.QcannotBindToMethod)
+            | None          -> invalidOp (SR.GetString SR.QcannotBindToMethod)
             | Some methInfo -> methInfo
 
     let bindMethodHelper (parentT: Type, nm, marity, argtys, rty) =
@@ -1091,7 +1091,7 @@ module Patterns =
 
     let bindModuleProperty (ty: Type, nm) =
         match ty.GetProperty(nm, staticBindingFlags) with
-        | null -> raise <| System.InvalidOperationException (String.Format(SR.GetString(SR.QcannotBindProperty), nm, ty.ToString()))
+        | null -> invalidOp (String.Format(SR.GetString(SR.QcannotBindProperty), nm, ty.ToString()))
         | res -> res
 
     let bindModuleFunctionWithCallSiteArgs (ty: Type, nm, argTypes: Type list, tyArgs: Type list) =
@@ -1115,7 +1115,7 @@ module Patterns =
                     let methodTyArgCount = if mi.IsGenericMethod then mi.GetGenericArguments().Length else 0
                     methodTyArgCount = tyArgs.Length
                 )
-            let fail() = raise <| System.InvalidOperationException (String.Format(SR.GetString(SR.QcannotBindFunction), nm, ty.ToString()))
+            let fail() = invalidOp (String.Format(SR.GetString(SR.QcannotBindFunction), nm, ty.ToString()))
             match candidates with
             | [||] -> fail()
             | [| solution |] -> solution
@@ -1416,7 +1416,7 @@ module Patterns =
         elif a = "." then st.localAssembly
         else
             match System.Reflection.Assembly.Load a with
-            | null -> raise <| System.InvalidOperationException(String.Format(SR.GetString(SR.QfailedToBindAssembly), a.ToString()))
+            | null -> invalidOp(String.Format(SR.GetString(SR.QfailedToBindAssembly), a.ToString()))
             | assembly -> assembly
 
     let u_NamedType st =
@@ -1473,7 +1473,7 @@ module Patterns =
         let n = tyargs.Length
         fun idx ->
           if idx < n then tyargs.[idx]
-          else raise <| System.InvalidOperationException (SR.GetString(SR.QtypeArgumentOutOfRange))
+          else invalidOp (SR.GetString(SR.QtypeArgumentOutOfRange))
 
     let envClosed (spliceTypes: Type[]) =
         { vars = Map.empty
@@ -1552,7 +1552,7 @@ module Patterns =
         let meths = ty.GetMethods staticBindingFlags |> Array.filter (fun mi -> mi.Name = nm)
         match meths with
         | [||] ->
-            raise <| System.InvalidOperationException (String.Format(SR.GetString(SR.QcannotBindFunction), nm, ty.ToString()))
+            invalidOp (String.Format(SR.GetString(SR.QcannotBindFunction), nm, ty.ToString()))
         | [| minfo |] ->
             match witnessInfo with
             | None ->
@@ -1561,7 +1561,7 @@ module Patterns =
                 let methsW = ty.GetMethods(staticBindingFlags) |> Array.filter (fun mi -> mi.Name = nmW)
                 match methsW with
                 | [||] ->
-                    raise <| System.InvalidOperationException (String.Format(SR.GetString(SR.QcannotBindFunction), nmW, ty.ToString()))
+                    invalidOp (String.Format(SR.GetString(SR.QcannotBindFunction), nmW, ty.ToString()))
                 | [| minfoW |] ->
                     Unique(StaticMethodCallWOp(minfo, minfoW, nWitnesses))
                 | _ ->
@@ -2295,8 +2295,7 @@ module ExprShape =
             | ValueOp(v, ty, None), [] -> mkValue(v, ty)
             | ValueOp(v, ty, Some nm), [] -> mkValueWithName(v, ty, nm)
             | WithValueOp(v, ty), [e] -> mkValueWithDefn(v, ty, e)
-            | _ -> raise <| System.InvalidOperationException (SR.GetString(SR.QillFormedAppOrLet))
-
+            | _ -> invalidOp (SR.GetString(SR.QillFormedAppOrLet))
 
         EA(e.Tree, attrs)
 
