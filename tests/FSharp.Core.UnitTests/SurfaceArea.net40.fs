@@ -2808,7 +2808,6 @@ Microsoft.FSharp.Core.Operators+Checked: T3 op_Multiply$W[T1,T2,T3](Microsoft.FS
 Microsoft.FSharp.Core.Operators+Checked: T3 op_Subtraction$W[T1,T2,T3](Microsoft.FSharp.Core.FSharpFunc`2[T1,Microsoft.FSharp.Core.FSharpFunc`2[T2,T3]], T1, T2)
 Microsoft.FSharp.Core.Operators+Checked: UInt16 ToUInt16$W[T](Microsoft.FSharp.Core.FSharpFunc`2[T,System.UInt16], T)
 Microsoft.FSharp.Core.Operators+Checked: UInt32 ToUInt32$W[T](Microsoft.FSharp.Core.FSharpFunc`2[T,System.UInt32], T)
-Microsoft.FSharp.Core.Operators+Checked: UInt32 ToUInt$W[T](Microsoft.FSharp.Core.FSharpFunc`2[T,System.UInt32], T)
 Microsoft.FSharp.Core.Operators+Checked: UInt64 ToUInt64$W[T](Microsoft.FSharp.Core.FSharpFunc`2[T,System.UInt64], T)
 Microsoft.FSharp.Core.Operators+Checked: UIntPtr ToUIntPtr$W[T](Microsoft.FSharp.Core.FSharpFunc`2[T,System.UIntPtr], T)
 Microsoft.FSharp.Core.Operators+NonStructuralComparison: Boolean op_Equality$W[T](Microsoft.FSharp.Core.FSharpFunc`2[T,Microsoft.FSharp.Core.FSharpFunc`2[T,System.Boolean]], T, T)
