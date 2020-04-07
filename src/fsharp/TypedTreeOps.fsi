@@ -2349,10 +2349,6 @@ val GetTraitConstraintInfosOfTypars: TcGlobals -> Typars -> TraitConstraintInfo 
 
 val GetTraitWitnessInfosOfTypars: TcGlobals -> numParentTypars: int -> typars: Typars -> TraitWitnessInfos
 
-val isStaticClass: g: TcGlobals -> tcref: TyconRef -> bool
-
-val CombineCcuContentFragments: range -> ModuleOrNamespaceType list -> ModuleOrNamespaceType
-
 /// An immutable mappping from witnesses to some data.
 ///
 /// Note: this uses an immutable HashMap/Dictionary with an IEqualityComparer that captures TcGlobals, see EmptyTraitWitnessInfoHashMap
@@ -2360,3 +2356,25 @@ type TraitWitnessInfoHashMap<'T> = ImmutableDictionary<TraitWitnessInfo, 'T>
 
 /// Create an empty immutable mapping from witnesses to some data
 val EmptyTraitWitnessInfoHashMap: TcGlobals -> TraitWitnessInfoHashMap<'T>
+
+/// Match expressions that are an application of a particular F# function value
+val (|ValApp|_|) : TcGlobals -> ValRef -> Expr -> (TypeInst * Exprs * range) option
+
+val isStaticClass: g: TcGlobals -> tcref: TyconRef -> bool
+
+val CombineCcuContentFragments: range -> ModuleOrNamespaceType list -> ModuleOrNamespaceType
+
+/// Recognise a while expression
+val (|WhileExpr|_|): Expr -> (DebugPointAtWhile * SpecialWhileLoopMarker * Expr * Expr * range) option
+
+/// Recognise a for-loop expression
+val (|ForLoopExpr|_|): Expr -> (DebugPointAtFor * ForLoopStyle * Expr * Expr * Val * Expr * range) option
+
+/// Recognise a try-catch expression
+val (|TryCatchExpr|_|): Expr -> (DebugPointAtTry * DebugPointAtWith * TType * Expr * Val * Expr * Val * Expr * range) option
+
+/// Recognise a try-finally expression
+val (|TryFinallyExpr|_|): Expr -> (DebugPointAtTry * DebugPointAtFinally * TType * Expr * Expr * range) option
+
+/// Add a label to use as the target for a goto
+val mkLabelled: range -> ILCodeLabel -> Expr -> Expr 
